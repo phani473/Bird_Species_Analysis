@@ -40,6 +40,7 @@ def perform_eda(df):
     if df.empty:
         st.warning("No data available for analysis.")
         return
+    
 
     # Temporal Analysis: Observations by Date
     if "date" in df.columns:
@@ -107,6 +108,19 @@ def perform_eda(df):
             barmode="stack"
         )
         st.plotly_chart(fig_distance_impact)
+        
+        # Distance vs. Species Heatmap
+        st.subheader("Distance vs. Species Heatmap")
+        fig_heatmap = px.density_heatmap(
+            distance_impact,
+            x="distance",
+            y="scientific_name",
+            z="count",
+            title="Heatmap of Distance vs. Species Observations",
+            labels={"count": "Observation Density", "distance": "Distance", "scientific_name": "Species"},
+            color_continuous_scale="Viridis"
+        )
+        st.plotly_chart(fig_heatmap)
 
     # Disturbance Analysis
     if "disturbance" in df.columns:
