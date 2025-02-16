@@ -49,45 +49,20 @@ def perform_eda(df):
         fig = px.line(x=date_counts.index, y=date_counts.values, labels={'x': 'Date', 'y': 'Number of Observations'})
         st.plotly_chart(fig)
 
-
     # Spatial Analysis: Species Diversity by Location Type
     if "location_type" in df.columns and "scientific_name" in df.columns:
         st.subheader("Species Diversity by Location Type")
-
-        # Calculate species richness (number of unique species) per location type
         location_diversity = df.groupby('location_type')['scientific_name'].nunique().reset_index()
-        location_diversity.columns = ['Location Type', 'Number of Species']  # More descriptive column names
+        location_diversity.columns = ['Location Type', 'Number of Species']
 
-        # Create bar chart
         fig_species_diversity = px.bar(
             location_diversity, 
             x='Location Type', 
             y='Number of Species', 
-            title='Species Richness by Location Type', # Title added
-            color='Location Type', # Color added
-            labels={'Number of Species': 'Number of Unique Species'}  # Clearer label
+            title='Species Richness by Location Type', 
+            color='Location Type'
         )
         st.plotly_chart(fig_species_diversity)
-
-
-        # Enhanced Visualization: Species Composition by Location Type (Optional)
-        st.subheader("Species Composition by Location Type")
-
-        # Group by location type and species, then count occurrences
-        species_composition = df.groupby(['location_type', 'scientific_name']).size().reset_index(name='count')
-
-        # Create a more informative bar chart (stacked bar chart)
-        fig_species_comp = px.bar(
-            species_composition, 
-            x='location_type', 
-            y='count', 
-            color='scientific_name',  # Different color for each species
-            title='Species Composition by Location Type', # Title added
-            labels={'count': 'Number of Observations', 'scientific_name': 'Species'}, # Clearer labels
-            barmode='stack' # Stacked bar chart
-        )
-        st.plotly_chart(fig_species_comp)
-
 
     # Environmental Conditions: Temperature vs. Observations
     if "temperature" in df.columns and "scientific_name" in df.columns:
@@ -103,6 +78,68 @@ def perform_eda(df):
         fig = px.bar(at_risk_species, x='Species', y='Count', labels={'x': 'Species', 'y': 'Number of Observations'})
         st.plotly_chart(fig)
 
+    # Distance Analysis
+    if "distance" in df.columns:
+        st.subheader("Distance Analysis")
+        distance_counts = df["distance"].value_counts().reset_index()
+        distance_counts.columns = ["Distance", "Count"]
+        
+        fig_distance = px.bar(
+            distance_counts,
+            x="Distance",
+            y="Count",
+            title="Distribution of Observation Distances",
+            labels={"Count": "Number of Observations"},
+            color="Distance"
+        )
+        st.plotly_chart(fig_distance)
+
+        # Distance Impact on Species Observations
+        distance_impact = df.groupby(["distance", "scientific_name"]).size().reset_index(name="count")
+        
+        fig_distance_impact = px.bar(
+            distance_impact,
+            x="distance",
+            y="count",
+            color="scientific_name",
+            title="Impact of Distance on Species Observations",
+            labels={"count": "Number of Observations", "distance": "Distance"},
+            barmode="stack"
+        )
+        st.plotly_chart(fig_distance_impact)
+
+    # Disturbance Analysis
+    if "disturbance" in df.columns:
+        st.subheader("Disturbance Analysis")
+
+        # Distribution of Disturbance Types
+        disturbance_counts = df["disturbance"].value_counts().reset_index()
+        disturbance_counts.columns = ["Disturbance Type", "Count"]
+        
+        fig_disturbance = px.bar(
+            disturbance_counts, 
+            x="Disturbance Type", 
+            y="Count", 
+            title="Distribution of Disturbance Types",
+            labels={"Count": "Number of Observations"},
+            color="Disturbance Type"
+        )
+        st.plotly_chart(fig_disturbance)
+
+        # Impact of Disturbance on Observations
+        disturbance_impact = df.groupby(["disturbance", "scientific_name"]).size().reset_index(name="count")
+
+        fig_disturbance_impact = px.bar(
+            disturbance_impact,
+            x="disturbance",
+            y="count",
+            color="scientific_name",
+            title="Impact of Disturbance on Species Observations",
+            labels={"count": "Number of Observations", "disturbance": "Disturbance Type"},
+            barmode="stack"
+        )
+        st.plotly_chart(fig_disturbance_impact)
+
 # Step 4: Create Streamlit Dashboard
 def create_dashboard(df):
     st.title("Bird Species Observation Analysis")
@@ -115,31 +152,44 @@ def create_dashboard(df):
     # Sidebar filters
     st.sidebar.header("Filters")
 
-    # Fix column name casing and check existence
     if "location_type" in df.columns:
         location_type = st.sidebar.selectbox("Select Location Type", ["All", "Forest", "Grassland"])
     else:
         st.sidebar.write("Location Type data not available.")
         location_type = "All"
+
+    if "admin_unit_code" in df.columns:
+        admin_units = df["admin_unit_code"].unique()
+        selected_admin_unit = st.sidebar.selectbox("Select Admin Unit Code", ["All"] + list(admin_units))
+    else:
+        selected_admin_unit = "All"
     
-    # Date filtering
     if "date" in df.columns:
-        df["date"] = pd.to_datetime(df["date"])  # Convert to datetime format
+        df["date"] = pd.to_datetime(df["date"])
         min_date, max_date = df["date"].min(), df["date"].max()
         date_range = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
     else:
         st.sidebar.write("Date data not available.")
         date_range = None
 
+    if "disturbance" in df.columns:
+        disturbance_type = st.sidebar.multiselect("Select Disturbance Type", options=df["disturbance"].unique(), default=df["disturbance"].unique())
+    else:
+        st.sidebar.write("Disturbance data not available.")
+        disturbance_type = None
+
     # Apply filters
     filtered_df = df
+    if selected_admin_unit != "All":
+        filtered_df = filtered_df[filtered_df['admin_unit_code'] == selected_admin_unit]
     if location_type and location_type != "All":
         filtered_df = filtered_df[filtered_df['location_type'] == location_type]
     if date_range and len(date_range) == 2:
-        start_date = pd.to_datetime(date_range[0])
-        end_date = pd.to_datetime(date_range[1])
+        start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
         filtered_df = filtered_df[(filtered_df['date'] >= start_date) & (filtered_df['date'] <= end_date)]
-    
+    if disturbance_type:
+        filtered_df = filtered_df[filtered_df['disturbance'].isin(disturbance_type)]
+
     # Display filtered data
     st.subheader("Filtered Data")
     st.write(filtered_df)
