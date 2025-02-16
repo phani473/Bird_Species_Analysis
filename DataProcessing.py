@@ -5,15 +5,28 @@ from psycopg2 import sql
 
 # Step 1: Load and Clean Data
 def load_and_clean_data():
-    # Read both Excel files
-    forest_df = pd.read_excel('Bird_Monitoring_Data_FOREST.xlsx')  # Replace with your file name
-    grassland_df = pd.read_excel('Bird_Monitoring_Data_GRASSLAND.xlsx')  # Replace with your file name
+    # Read both Excel files 
+    forest_sheets = pd.read_excel('Bird_Monitoring_Data_FOREST.xlsx', sheet_name=None)
+    grassland_sheets = pd.read_excel('Bird_Monitoring_Data_GRASSLAND.xlsx', sheet_name=None)
 
-    # Combine both datasets
+    # Filter out empty sheets
+    forest_dfs = [df for df in forest_sheets.values() if not df.empty]
+    grassland_dfs = [df for df in grassland_sheets.values() if not df.empty]
+
+    # Check if any data is available before concatenation
+    forest_df = pd.concat(forest_dfs, ignore_index=True) if forest_dfs else pd.DataFrame()
+    grassland_df = pd.concat(grassland_dfs, ignore_index=True) if grassland_dfs else pd.DataFrame()
+
+    # Merge both datasets
     combined_df = pd.concat([forest_df, grassland_df], ignore_index=True)
 
-    # Handle missing values
-    combined_df = combined_df.dropna(subset=['Scientific_Name'])  # Drop rows with missing species names
+    # If no data is available, return an empty DataFrame
+    if combined_df.empty:
+        raise ValueError("No valid data found in the Excel sheets.")
+
+    # Drop rows where 'Scientific_Name' is missing
+    combined_df = combined_df.dropna(subset=['Scientific_Name'])
+
 
     # Fix: Avoid inplace=True with chained assignment
     combined_df['Temperature'] = combined_df['Temperature'].fillna(combined_df['Temperature'].mean())  # Fill missing temperature with mean
@@ -28,7 +41,7 @@ def load_and_clean_data():
     columns_to_keep = [
         'Admin_Unit_Code', 'Location_Type', 'Year', 'Month', 'Date', 'Scientific_Name',
         'Common_Name', 'Temperature', 'Humidity', 'Distance', 'Flyover_Observed', 'Sex',
-        'PIF_Watchlist_Status', 'Regional_Stewardship_Status'
+        'PIF_Watchlist_Status', 'Regional_Stewardship_Status', 'Disturbance'
     ]
     combined_df = combined_df[columns_to_keep]
 
@@ -72,7 +85,9 @@ def store_data_in_postgres(df):
         Flyover_Observed BOOLEAN,
         Sex VARCHAR(50),
         PIF_Watchlist_Status BOOLEAN,
-        Regional_Stewardship_Status BOOLEAN
+        Regional_Stewardship_Status BOOLEAN,
+        Disturbance VARCHAR(100)
+
     );
     """
     cursor.execute(create_table_query)
@@ -84,8 +99,8 @@ def store_data_in_postgres(df):
         INSERT INTO bird_observations (
             Admin_Unit_Code, Location_Type, Year, Month, Date, Scientific_Name,
             Common_Name, Temperature, Humidity, Distance, Flyover_Observed, Sex,
-            PIF_Watchlist_Status, Regional_Stewardship_Status
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+            PIF_Watchlist_Status, Regional_Stewardship_Status, Disturbance
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
         """)
         cursor.execute(insert_query, tuple(row))
     conn.commit()
