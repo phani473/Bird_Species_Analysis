@@ -37,11 +37,36 @@ def load_and_clean_data():
     combined_df['Year'] = combined_df['Date'].dt.year  # Extract year
     combined_df['Month'] = combined_df['Date'].dt.month  # Extract month
 
+    # Convert 'Interval_Length' to numeric, errors='coerce' turns invalid parsing into NaN
+    combined_df['Interval_Length'] = pd.to_numeric(combined_df['Interval_Length'], errors='coerce')
+
+    def categorize_interval(length):
+        if pd.isnull(length):
+            return 'Unknown'
+        elif 0 <= length <= 2.5:
+            return '0-2.5 min'
+        elif 2.5 < length <= 5:
+            return '2.5-5 min'
+        elif 5 < length <= 7.5:
+            return '5-7.5 min'
+        elif 7.5 < length <= 10:
+            return '7.5-10 min'
+        else:
+            return '10+ min'
+        
+    # Apply categorization to 'Interval_Length'
+    combined_df['Interval_Length'] = combined_df['Interval_Length'].apply(categorize_interval)
+
+    # Handle 'Sky' and 'Wind' columns: Clean, categorize or map values if needed
+    combined_df['Sky'] = combined_df['Sky'].fillna('Unknown')  # Handle missing sky data
+    combined_df['Wind'] = combined_df['Wind'].fillna('Unknown')  # Handle missing wind data
+
     # Filter relevant columns
     columns_to_keep = [
-        'Admin_Unit_Code', 'Location_Type', 'Year', 'Month', 'Date', 'Scientific_Name',
-        'Common_Name', 'Temperature', 'Humidity', 'Distance', 'Flyover_Observed', 'Sex',
-        'PIF_Watchlist_Status', 'Regional_Stewardship_Status', 'Disturbance'
+        'Admin_Unit_Code', 'Location_Type', 'Interval_Length', 'ID_Method', 'Year', 'Month', 'Date', 
+        'Scientific_Name', 'Common_Name', 'Temperature', 'Humidity', 'Distance', 'Flyover_Observed', 
+        'Sex', 'PIF_Watchlist_Status', 'Regional_Stewardship_Status', 'Disturbance', 'Plot_Name', 
+        'Sky', 'Wind', 'Observer', 'Visit'  # Added Observer and Visit
     ]
     combined_df = combined_df[columns_to_keep]
 
@@ -69,11 +94,13 @@ def store_data_in_postgres(df):
     cursor.execute(drop_table_query)
     conn.commit()
 
-    # Create the table
+    # Create the table with the new columns 'Observer' and 'Visit'
     create_table_query = """
     CREATE TABLE bird_observations (
         Admin_Unit_Code VARCHAR(50),
         Location_Type VARCHAR(50),
+        Interval_Length VARCHAR(50),
+        ID_Method VARCHAR(50),
         Year INT,
         Month INT,
         Date DATE,
@@ -86,8 +113,12 @@ def store_data_in_postgres(df):
         Sex VARCHAR(50),
         PIF_Watchlist_Status BOOLEAN,
         Regional_Stewardship_Status BOOLEAN,
-        Disturbance VARCHAR(100)
-
+        Disturbance VARCHAR(100),
+        Plot_Name VARCHAR(100),
+        Sky VARCHAR(50),
+        Wind VARCHAR(50),
+        Observer VARCHAR(100),  -- Added Observer
+        Visit INT  -- Added Visit
     );
     """
     cursor.execute(create_table_query)
@@ -97,10 +128,10 @@ def store_data_in_postgres(df):
     for _, row in df.iterrows():
         insert_query = sql.SQL("""
         INSERT INTO bird_observations (
-            Admin_Unit_Code, Location_Type, Year, Month, Date, Scientific_Name,
+            Admin_Unit_Code, Location_Type, Interval_Length, ID_Method, Year, Month, Date, Scientific_Name,
             Common_Name, Temperature, Humidity, Distance, Flyover_Observed, Sex,
-            PIF_Watchlist_Status, Regional_Stewardship_Status, Disturbance
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+            PIF_Watchlist_Status, Regional_Stewardship_Status, Disturbance, Plot_Name, Sky, Wind, Observer, Visit
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
         """)
         cursor.execute(insert_query, tuple(row))
     conn.commit()
