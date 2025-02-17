@@ -41,18 +41,18 @@ def perform_eda(df):
         st.warning("No data available for analysis.")
         return
     
-
-    # Temporal Analysis: Observations by Date
+    # 1. Temporal Analysis: Observations by Date
+    st.subheader("1. Temporal Analysis Observations by Date")
     if "date" in df.columns:
-        st.subheader("Observations by Date")
         df["date"] = pd.to_datetime(df["date"])  # Ensure date is in datetime format
         date_counts = df["date"].value_counts().sort_index()
         fig = px.line(x=date_counts.index, y=date_counts.values, labels={'x': 'Date', 'y': 'Number of Observations'})
         st.plotly_chart(fig)
+        st.write("**Summary:** The temporal analysis shows the number of bird observations over time. Peaks in the graph indicate periods of higher bird activity, which may correlate with migration or breeding seasons.")
 
-    # Spatial Analysis: Species Diversity by Location Type
+    # 2. Spatial Analysis: Species Diversity by Location Type
+    st.subheader("2. Spatial Analysis")
     if "location_type" in df.columns and "scientific_name" in df.columns:
-        st.subheader("Species Diversity by Location Type")
         location_diversity = df.groupby('location_type')['scientific_name'].nunique().reset_index()
         location_diversity.columns = ['Location Type', 'Number of Species']
 
@@ -64,22 +64,57 @@ def perform_eda(df):
             color='Location Type'
         )
         st.plotly_chart(fig_species_diversity)
+        st.write("**Summary:** This chart compares species richness across different location types (e.g., forest, grassland). It highlights which habitats support the highest biodiversity.")
 
-    # Environmental Conditions: Temperature vs. Observations
-    if "temperature" in df.columns and "scientific_name" in df.columns:
-        st.subheader("Temperature vs. Observations")
-        fig = px.bar(df, x='temperature', y='scientific_name', color='location_type', labels={'x': 'Temperature', 'y': 'Species'})
+    # Plot-Level Analysis: Observations by Plot Name
+    if "plot_name" in df.columns:
+        plot_observations = df.groupby('plot_name')['scientific_name'].nunique().reset_index()
+        plot_observations.columns = ['Plot Name', 'Number of Species']
+        fig_plot_observations = px.bar(plot_observations, x='Plot Name', y='Number of Species', title='Species Observations by Plot Name', color='Plot Name')
+        st.plotly_chart(fig_plot_observations)
+        st.write("**Summary:** This analysis shows the number of unique species observed in each plot. Plots with higher species counts may indicate biodiversity hotspots.")
+
+    # 3. Species Analysis
+    st.subheader("3. Species Analysis")
+    # Activity Patterns: Check most common activity types
+    if "interval_length" in df.columns and "id_method" in df.columns:
+        activity_patterns = df.groupby(['interval_length', 'id_method']).size().reset_index(name='Observations')
+        fig_activity = px.bar(activity_patterns, x='interval_length', y='Observations', color='id_method', title="Activity Patterns by Interval Length and Method")
+        st.plotly_chart(fig_activity)
+        st.write("**Summary:** This chart shows the most common bird activity patterns based on observation intervals and identification methods. It helps identify preferred observation durations and methods.")
+
+    # Sex Ratio: Analyze male-to-female ratio for different species
+    if "sex" in df.columns:
+        sex_ratio = df.groupby(['scientific_name', 'sex']).size().reset_index(name='Count')
+        fig_sex_ratio = px.bar(sex_ratio, x='scientific_name', y='Count', color='sex', title="Sex Ratio for Species")
+        st.plotly_chart(fig_sex_ratio)
+        st.write("**Summary:** The sex ratio analysis reveals the male-to-female distribution across species. Some species may show a skewed ratio, which could indicate gender-based behavioral differences.")
+
+    # 4. Environmental Conditions: Weather Correlation
+    if "temperature" in df.columns and "humidity" in df.columns and "sky" in df.columns and "wind" in df.columns:
+        st.subheader("4. Environmental Conditions: Weather Correlation")
+        weather_conditions = df.groupby(['temperature', 'humidity', 'sky', 'wind']).size().reset_index(name='Observations')
+        fig_weather = px.scatter(weather_conditions, x='temperature', y='humidity', color='sky', title="Weather Correlation with Observations")
+        st.plotly_chart(fig_weather)
+        st.write("**Summary:** This scatter plot explores the relationship between weather conditions (temperature, humidity, sky, wind) and bird observations. Certain weather conditions may correlate with higher bird activity.")
+
+    if "disturbance" in df.columns:
+        st.subheader("Impact of Disturbance on Bird Sightings")
+        disturbance_effect = df.groupby('disturbance')['scientific_name'].count().reset_index()
+        disturbance_effect.columns = ['Disturbance', 'Sighting_Count']
+        fig = px.bar(disturbance_effect, 
+                     x='Disturbance', 
+                     y='Sighting_Count', 
+                     title='Impact of Disturbance on Bird Sightings',
+                     labels={'Disturbance': 'Disturbance Type', 'Sighting_Count': 'Number of Bird Sightings'},
+                     color='Sighting_Count', color_continuous_scale='Viridis')
+        fig.update_layout(xaxis_title='Disturbance Type', yaxis_title='Number of Bird Sightings')
+        fig.update_xaxes(tickangle=45)  # Rotate x-axis labels for better readability
         st.plotly_chart(fig)
+        st.write("**Summary:** This chart shows how different types of disturbances (e.g., human activity, weather events) impact bird sightings. Some disturbances may reduce bird activity, while others may have no significant effect.")
 
-    # Conservation Insights: At-Risk Species
-    if "pif_watchlist_status" in df.columns and "scientific_name" in df.columns:
-        st.subheader("At-Risk Species")
-        at_risk_species = df[df['pif_watchlist_status'] == True]['scientific_name'].value_counts().reset_index()
-        at_risk_species.columns = ['Species', 'Count']
-        fig = px.bar(at_risk_species, x='Species', y='Count', labels={'x': 'Species', 'y': 'Number of Observations'})
-        st.plotly_chart(fig)
-
-    # Distance Analysis
+    # 5. Distance and Behavior
+    st.subheader("5. Distance and Behavior")
     if "distance" in df.columns:
         st.subheader("Distance Analysis")
         distance_counts = df["distance"].value_counts().reset_index()
@@ -94,23 +129,74 @@ def perform_eda(df):
             color="Distance"
         )
         st.plotly_chart(fig_distance)
+        st.write("**Summary:** This bar chart shows the distribution of observation distances. It helps identify whether birds are typically observed closer or farther from the observer.")
 
-        # Distance Impact on Species Observations
-        distance_impact = df.groupby(["distance", "scientific_name"]).size().reset_index(name="count")
-        
-        fig_distance_impact = px.bar(
-            distance_impact,
-            x="distance",
-            y="count",
-            color="scientific_name",
-            title="Impact of Distance on Species Observations",
-            labels={"count": "Number of Observations", "distance": "Distance"},
-            barmode="stack"
+    # Flyover Frequency: Detect trends in bird behavior during observation (Flyover_Observed)
+    if "flyover_observed" in df.columns:
+        st.subheader("Flyover Frequency Analysis")
+        flyover_counts = df["flyover_observed"].value_counts().reset_index()
+        flyover_counts.columns = ["Flyover Observed", "Count"]
+        fig_flyover = px.bar(
+            flyover_counts,
+            x="Flyover Observed",
+            y="Count",
+            title="Flyover Frequency",
+            labels={"Count": "Number of Observations"},
+            color="Flyover Observed"
         )
-        st.plotly_chart(fig_distance_impact)
-        
-        # Distance vs. Species Heatmap
-        st.subheader("Distance vs. Species Heatmap")
+        st.plotly_chart(fig_flyover)
+        st.write("**Summary:** This chart shows how often flyovers (birds flying overhead) are observed. Frequent flyovers may indicate migration patterns or preferred flight paths.")
+
+    # 6. Observer Trends & Bias Analysis
+    st.subheader("6. Observer Trends")
+    if "observer" in df.columns:
+        observer_counts = df.groupby('observer')['scientific_name'].nunique().reset_index()
+        observer_counts.columns = ['Observer', 'Unique Species Count']
+        fig_observer_bias = px.bar(
+            observer_counts, 
+            x='Observer', 
+            y='Unique Species Count', 
+            title='Observer Trends and Bias', 
+            color='Observer'
+        )
+        st.plotly_chart(fig_observer_bias)
+        st.write("**Summary:** This chart highlights observer trends, showing how many unique species each observer has recorded. It helps identify potential observer bias or expertise.")
+
+    # Visit Patterns: Evaluate repeated visits and species count/diversity
+    if "visit" in df.columns:
+        st.subheader("Visit Patterns Analysis")
+        visit_counts = df.groupby('visit')['scientific_name'].nunique().reset_index()
+        visit_counts.columns = ['Visit', 'Number of Unique Species']
+        fig_visit_patterns = px.line(
+            visit_counts, 
+            x='Visit', 
+            y='Number of Unique Species', 
+            title='Visit Patterns and Species Diversity'
+        )
+        st.plotly_chart(fig_visit_patterns)
+        st.write("**Summary:** This line chart shows how species diversity changes with repeated visits to the same location. Increased diversity over time may indicate effective monitoring or seasonal changes.")
+
+    # 7. Conservation Insights: Watchlist Trends
+    st.subheader("7. Conservation Insights")
+    if "pif_watchlist_status" in df.columns and "regional_stewardship_status" in df.columns:
+        # Watchlist status trends: Count species in each status category
+        watchlist_status_counts = df.groupby('pif_watchlist_status')['scientific_name'].nunique().reset_index()
+        watchlist_status_counts.columns = ['Watchlist Status', 'Species Count']
+        fig_watchlist = px.bar(watchlist_status_counts, x='Watchlist Status', y='Species Count', title='Species Count by PIF Watchlist Status', color='Watchlist Status')
+        st.plotly_chart(fig_watchlist)
+        st.write("**Summary:** This chart shows the number of species on the PIF Watchlist, highlighting those at risk and requiring conservation focus.")
+
+        # Regional Stewardship Status trends
+        stewardship_status_counts = df.groupby('regional_stewardship_status')['scientific_name'].nunique().reset_index()
+        stewardship_status_counts.columns = ['Stewardship Status', 'Species Count']
+        fig_stewardship = px.bar(stewardship_status_counts, x='Stewardship Status', y='Species Count', title='Species Count by Regional Stewardship Status', color='Stewardship Status')
+        st.plotly_chart(fig_stewardship)
+        st.write("**Summary:** This chart highlights species under regional stewardship, indicating areas where conservation efforts are most needed.")
+
+    # 8. Distance vs. Species Heatmap
+    if "distance" in df.columns and "scientific_name" in df.columns:
+        distance_impact = df.groupby(["distance", "scientific_name"]).size().reset_index(name="count")
+        st.subheader("8. Distance vs. Species Heatmap")
         fig_heatmap = px.density_heatmap(
             distance_impact,
             x="distance",
@@ -121,38 +207,19 @@ def perform_eda(df):
             color_continuous_scale="Viridis"
         )
         st.plotly_chart(fig_heatmap)
+        st.write("**Summary:** This heatmap shows the relationship between observation distance and species. It helps identify species that are typically observed at specific distances.")
 
-    # Disturbance Analysis
-    if "disturbance" in df.columns:
-        st.subheader("Disturbance Analysis")
-
-        # Distribution of Disturbance Types
-        disturbance_counts = df["disturbance"].value_counts().reset_index()
-        disturbance_counts.columns = ["Disturbance Type", "Count"]
-        
-        fig_disturbance = px.bar(
-            disturbance_counts, 
-            x="Disturbance Type", 
-            y="Count", 
-            title="Distribution of Disturbance Types",
-            labels={"Count": "Number of Observations"},
-            color="Disturbance Type"
-        )
-        st.plotly_chart(fig_disturbance)
-
-        # Impact of Disturbance on Observations
-        disturbance_impact = df.groupby(["disturbance", "scientific_name"]).size().reset_index(name="count")
-
-        fig_disturbance_impact = px.bar(
-            disturbance_impact,
-            x="disturbance",
-            y="count",
-            color="scientific_name",
-            title="Impact of Disturbance on Species Observations",
-            labels={"count": "Number of Observations", "disturbance": "Disturbance Type"},
-            barmode="stack"
-        )
-        st.plotly_chart(fig_disturbance_impact)
+    # 9. Number of Bird Species Observed at Different Temperatures
+    if "temperature" in df.columns and "scientific_name" in df.columns:
+        df['temperature'] = pd.to_numeric(df['temperature'], errors='coerce')
+        df_cleaned = df.dropna(subset=['temperature', 'scientific_name'])
+        temp_bird_counts = df_cleaned.groupby('temperature')['scientific_name'].nunique().reset_index()
+        temp_bird_counts.columns = ['Temperature', 'Number of Species']
+        fig = px.bar(temp_bird_counts, x='Temperature', y='Number of Species', 
+                     title='9. Number of Bird Species Observed at Different Temperatures',
+                     labels={'Temperature': 'Temperature (°C)', 'Number of Species': 'Unique Species Count'})
+        st.plotly_chart(fig)
+        st.write("**Summary:** This chart shows how bird species diversity varies with temperature. Certain temperature ranges may support higher biodiversity.")
 
 # Step 4: Create Streamlit Dashboard
 def create_dashboard(df):
